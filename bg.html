@@ -2,36 +2,57 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
     <title>Background Replacement</title>
+    <style>
+        .container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .output_canvas {
+            max-width: 100%;
+            max-height: 100vh;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <video class="input_video" style="display: none"></video>
-        <canvas class="output_canvas" width="1280px" height="720px"></canvas>
+        <video class="input_video" playsinline style="display: none"></video>
+        <canvas class="output_canvas"></canvas>
     </div>
     <script>
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.querySelector('.output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
 
+        // Set canvas size based on device
+        function setCanvasSize() {
+            const width = Math.min(window.innerWidth, 640);
+            const height = (width * 4) / 3;
+            canvasElement.width = width;
+            canvasElement.height = height;
+        }
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Draw the webcam image
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             
-            // Draw the segmentation mask
             if (results.segmentationMask) {
                 canvasCtx.globalCompositeOperation = 'destination-in';
                 canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
                 
-                // Set background color (here it's blue, you can change the color)
                 canvasCtx.globalCompositeOperation = 'destination-over';
-                canvasCtx.fillStyle = '#0000FF';  // Blue background
+                canvasCtx.fillStyle = '#0000FF';
                 canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
             }
             
@@ -50,19 +71,44 @@
 
         selfieSegmentation.onResults(onResults);
 
-        // Start webcam
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then((stream) => {
+        // iOS optimized video constraints
+        const constraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user',
+            }
+        };
+
+        // Start webcam with error handling
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = stream;
-                videoElement.play();
-                
+                await videoElement.play();
+
                 const processFrame = async () => {
-                    await selfieSegmentation.send({ image: videoElement });
+                    try {
+                        await selfieSegmentation.send({ image: videoElement });
+                    } catch (error) {
+                        console.error('Frame processing error:', error);
+                    }
                     requestAnimationFrame(processFrame);
                 };
                 
                 requestAnimationFrame(processFrame);
-            });
+            } catch (error) {
+                console.error('Camera access error:', error);
+                alert('Could not access camera. Please ensure camera permissions are granted.');
+            }
+        }
+
+        // Add playsinline attribute dynamically for iOS
+        videoElement.setAttribute('playsinline', true);
+        videoElement.setAttribute('webkit-playsinline', true);
+
+        // Start camera when page is fully loaded
+        document.addEventListener('DOMContentLoaded', startCamera);
     </script>
 </body>
 </html>
