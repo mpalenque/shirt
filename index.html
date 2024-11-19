@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MediaPipe Selfie Segmentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <style>
+        .container {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        .output_canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .input_video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <video class="input_video" style="display: none;" playsinline></video>
+        <canvas class="output_canvas" width="1280" height="720"></canvas>
+    </div>
+
+    <video id="input_video" style="display:none;"></video>
+    <canvas id="output_canvas"></canvas>
+
+    <a-scene mindar-image="imageTargetSrc: /assets/targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+      <a-assets>
+        <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
+        <a-asset-item id="astro" src="/assets/astro.glb"></a-asset-item>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+        <a-box color="blue" position="0 0 0.1" depth="0.1" height="0.1" width="0.1"
+          animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
+        ></a-box>
+        <a-gltf-model src="#astro" position="0.2 0 0.1" scale="0.1 0.1 0.1"></a-gltf-model>
+      </a-entity>
+
+      <!-- Adding lights -->
+      <a-light type="ambient" color="#ffffff"></a-light>
+      <a-light type="directional" color="#ffffff" intensity="0.5" position="1 1 0"></a-light>
+    </a-scene>
+
+
+
+
+
+
+
+    <script>
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        // Create and load background image
+        const bgImage = new Image();
+        bgImage.src = 'https://w0.peakpx.com/wallpaper/271/242/HD-wallpaper-autumn-tree-nature-forwest-sunset-thumbnail.jpg';
+        
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Draw the webcam image
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            // Draw the segmentation mask
+            if (results.segmentationMask) {
+                canvasCtx.globalCompositeOperation = 'destination-atop';
+                canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Draw background image instead of color
+                canvasCtx.globalCompositeOperation = 'destination-over';
+                canvasCtx.drawImage(bgImage, 0, 0, canvasElement.width, canvasElement.height);
+            }
+            
+            canvasCtx.restore();
+        }
+
+        const selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+        });
+
+        selfieSegmentation.setOptions({
+            modelSelection: 1,
+            selfieMode: true
+        });
+
+        selfieSegmentation.onResults(onResults);
+
+        // Wait for DOM to load before accessing camera
+        document.addEventListener('DOMContentLoaded', function() {
+            const camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await selfieSegmentation.send({image: videoElement});
+                },
+                facingMode: 'user',
+                width: 1280,
+                height: 720
+            });
+            camera.start();
+        });
+    </script>
+</body>
+</html>
