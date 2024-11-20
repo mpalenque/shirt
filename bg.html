@@ -4,10 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
@@ -16,6 +14,7 @@
         body {
             margin: 0;
             padding: 0;
+            overflow: hidden;
         }
         .container {
             width: 100vw;
@@ -40,8 +39,8 @@
         }
         a-scene {
             position: fixed;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw !important;
+            height: 100vh !important;
             z-index: 2;
         }
         #status {
@@ -58,16 +57,18 @@
             font-family: Arial, sans-serif;
         }
     </style>
-
-
-
 </head>
 <body>
     <div class="container">
         <video class="input_video" playsinline></video>
         <canvas class="output_canvas"></canvas>
 
-        <a-scene mindar-image="imageTargetSrc: https://mpalenque.github.io/shirt/assets/targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+        <a-scene embedded style="width: 100%; height: 100vh;" 
+                 mindar-image="imageTargetSrc: https://mpalenque.github.io/shirt/assets/targets.mind;" 
+                 color-space="sRGB" 
+                 renderer="colorManagement: true, physicallyCorrectLights" 
+                 vr-mode-ui="enabled: false" 
+                 device-orientation-permission-ui="enabled: false">
             <a-assets>
               <img id="card" src="/assets/yokkao.png" />
               <a-asset-item id="astro" src="https://mpalenque.github.io/shirt/assets/astro.glb"></a-asset-item>
@@ -76,24 +77,18 @@
             <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       
             <a-entity mindar-image-target="targetIndex: 0">
-              
-           
               <a-gltf-model src="#astro" position="0.2 0 0.1" scale="0.4 0.4 0.4"
-              animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
-              animation__float="property: position; to: 0.2 0.2 0.1; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
-          </a-gltf-model>
+                           animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
+                           animation__float="property: position; to: 0.2 0.2 0.1; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
+              </a-gltf-model>
             </a-entity>
       
-            <!-- Adding lights -->
             <a-light type="ambient" color="#ffffff"></a-light>
             <a-light type="directional" color="#ffffff" intensity="0.5" position="1 1 0"></a-light>
-          </a-scene>
+        </a-scene>
     </div>
 
-    <div id="status">Estado: No Detectado</div>
-
-
-
+    <div id="status">Detection: not</div>
     
     <script>
         const videoElement = document.querySelector('.input_video');
@@ -108,15 +103,28 @@
         bgVideo.src = '/assets/bg.mp4';
         bgVideo.loop = true;
         bgVideo.muted = true;
+        bgVideo.style.width = '100%';
+        bgVideo.style.height = '100%';
+        bgVideo.style.objectFit = 'cover';
         bgVideo.play();
         
-        // Set canvas size based on device
+        // Updated canvas size function
         function setCanvasSize() {
-            const width = Math.min(window.innerWidth, 640);
-            const height = (width * 4) / 3;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            canvasElement.style.width = `${width}px`;
+            canvasElement.style.height = `${height}px`;
             canvasElement.width = width;
             canvasElement.height = height;
+            
+            const arScene = document.querySelector('a-scene');
+            if (arScene) {
+                arScene.style.width = `${width}px`;
+                arScene.style.height = `${height}px`;
+            }
         }
+        
         setCanvasSize();
         window.addEventListener('resize', setCanvasSize);
     
@@ -125,29 +133,20 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
             if (isDetected) {
-                // Draw the background video when marker is detected
                 canvasCtx.drawImage(bgVideo, 0, 0, canvasElement.width, canvasElement.height);
             } else {
-                // Draw the original video frame when marker is not detected
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             }
             
-            // Draw the segmentation mask
             if (results.segmentationMask) {
-                // Create a temporary canvas for the person
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvasElement.width;
                 tempCanvas.height = canvasElement.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 
-                // Draw the original video frame
                 tempCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-                
-                // Apply the segmentation mask
                 tempCtx.globalCompositeOperation = 'destination-in';
                 tempCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
-                
-                // Draw the masked person over the background
                 canvasCtx.drawImage(tempCanvas, 0, 0);
             }
             
@@ -166,7 +165,6 @@
 
         selfieSegmentation.onResults(onResults);
 
-        // iOS optimized video constraints
         const constraints = {
             video: {
                 width: { ideal: 640 },
@@ -175,7 +173,6 @@
             }
         };
 
-        // Start webcam with error handling
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -198,46 +195,20 @@
             }
         }
 
-        // Add playsinline attribute dynamically for iOS
         videoElement.setAttribute('playsinline', true);
         videoElement.setAttribute('webkit-playsinline', true);
 
-        // Start camera when page is fully loaded
         document.addEventListener('DOMContentLoaded', startCamera);
 
-        // Update status based on image target detection
         const scene = document.querySelector('a-scene');
         scene.addEventListener('targetFound', () => {
-            statusElement.textContent = 'Estado: Detectado';
+            statusElement.textContent = 'Detection: Detected';
             isDetected = true;
         });
         scene.addEventListener('targetLost', () => {
-            statusElement.textContent = 'Estado: No Detectado';
+            statusElement.textContent = 'Detection: Not detected';
             isDetected = false;
         });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        
     </script>
 </body>
 </html>
