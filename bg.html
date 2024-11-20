@@ -58,6 +58,9 @@
             font-family: Arial, sans-serif;
         }
     </style>
+
+
+
 </head>
 <body>
     <div class="container">
@@ -66,17 +69,15 @@
 
         <a-scene mindar-image="imageTargetSrc: https://mpalenque.github.io/shirt/assets/targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
             <a-assets>
-              <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
+              <img id="card" src="/assets/yokkao.png" />
               <a-asset-item id="astro" src="https://mpalenque.github.io/shirt/assets/astro.glb"></a-asset-item>
             </a-assets>
       
             <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       
             <a-entity mindar-image-target="targetIndex: 0">
-              <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
-              <a-box color="blue" position="0 0 0.1" depth="0.1" height="0.1" width="0.1"
-                animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
-              ></a-box>
+              
+           
               <a-gltf-model src="#astro" position="0.2 0 0.1" scale="0.4 0.4 0.4"
               animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
               animation__float="property: position; to: 0.2 0.2 0.1; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
@@ -91,6 +92,9 @@
 
     <div id="status">Estado: No Detectado</div>
 
+
+
+    
     <script>
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.querySelector('.output_canvas');
@@ -211,6 +215,29 @@
             statusElement.textContent = 'Estado: No Detectado';
             isDetected = false;
         });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        
     </script>
 </body>
 </html>
