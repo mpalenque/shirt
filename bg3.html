@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <title>Background Replacement</title>
+    <style>
+       .container {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            
+        }
+        .output_canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity:01;
+        }
+        .input_video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            
+        }
+
+
+  
+  /* Add this to your CSS */
+  .output_canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 999;
+  }
+
+  #arjs-video {
+    z-index: 1;
+  }
+
+  a-scene {
+    z-index: 1;
+    position: relative;
+  }
+
+
+
+  .container {
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000; /* Ensure container is above AR elements */
+}
+
+.output_canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1001; /* Higher than container */
+    -webkit-transform: translateZ(0); /* iOS performance fix */
+}
+
+.input_video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    -webkit-transform: translateZ(0); /* iOS performance fix */
+}
+
+a-scene {
+    z-index: 1; /* Keep AR scene behind MediaPipe elements */
+}
+
+#arjs-video {
+    z-index: 1;
+}
+
+/* iOS-specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .output_canvas, 
+    .input_video {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+    }
+}
+
+
+
+
+
+
+  
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <video class="input_video" playsinline></video>
+        <canvas class="output_canvas"></canvas>
+
+        
+
+
+
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+    <script>
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        // Create and load background image
+        const bgImage = new Image();
+        bgImage.src = 'https://w0.peakpx.com/wallpaper/271/242/HD-wallpaper-autumn-tree-nature-forwest-sunset-thumbnail.jpg';
+        
+        // Set canvas size based on device
+        function setCanvasSize() {
+            const width = Math.min(window.innerWidth, 640);
+            const height = (width * 4) / 3;
+            canvasElement.width = width;
+            canvasElement.height = height;
+        }
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw the background image first
+            canvasCtx.drawImage(bgImage, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw the segmentation mask
+            if (results.segmentationMask) {
+                // Create a temporary canvas for the person
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvasElement.width;
+                tempCanvas.height = canvasElement.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // Draw the original video frame
+                tempCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Apply the segmentation mask
+                tempCtx.globalCompositeOperation = 'destination-in';
+                tempCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Draw the masked person over the background
+                canvasCtx.drawImage(tempCanvas, 0, 0);
+            }
+            
+            canvasCtx.restore();
+        }
+
+        const selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+        });
+        
+        selfieSegmentation.setOptions({
+            modelSelection: 1,
+        });
+
+        selfieSegmentation.onResults(onResults);
+
+        // iOS optimized video constraints
+        const constraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: 'user',
+            }
+        };
+
+        // Start webcam with error handling
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                await videoElement.play();
+
+                const processFrame = async () => {
+                    try {
+                        await selfieSegmentation.send({ image: videoElement });
+                    } catch (error) {
+                        console.error('Frame processing error:', error);
+                    }
+                    requestAnimationFrame(processFrame);
+                };
+                
+                requestAnimationFrame(processFrame);
+            } catch (error) {
+                console.error('Camera access error:', error);
+                alert('Could not access camera. Please ensure camera permissions are granted.');
+            }
+        }
+
+        // Add playsinline attribute dynamically for iOS
+        videoElement.setAttribute('playsinline', true);
+        videoElement.setAttribute('webkit-playsinline', true);
+
+        // Start camera when page is fully loaded
+        document.addEventListener('DOMContentLoaded', startCamera);
+    </script>
+</body>
+</html>
