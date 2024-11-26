@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Sentimiento en Tiempo Real</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .positive { 
+            color: green;
+            background-color: #e6ffe6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .negative { 
+            color: red;
+            background-color: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .neutral { 
+            color: gray;
+            background-color: #f2f2f2;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #start-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #start-button.recording {
+            background-color: #f44336;
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+        }
+        #transcript {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Análisis de Sentimiento en Tiempo Real</h1>
+    <button id="start-button">Iniciar Grabación</button>
+    <div class="status" id="status">Esperando para grabar...</div>
+    <div>
+        <h3>Tu voz transcrita:</h3>
+        <p id="transcript"></p>
+    </div>
+    <div>
+        <h3>Análisis de Sentimiento:</h3>
+        <p id="sentiment"></p>
+        <div id="sentiment-history"></div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('start-button');
+        const transcriptDisplay = document.getElementById('transcript');
+        const sentimentDisplay = document.getElementById('sentiment');
+        const sentimentHistory = document.getElementById('sentiment-history');
+        const statusDisplay = document.getElementById('status');
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+
+        recognition.interimResults = true;
+        recognition.continuous = true;
+        recognition.lang = 'es-ES'; // Cambiado a español
+
+        let isRecording = false;
+
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .map(result => result[0])
+                .map(result => result.transcript)
+                .join('');
+
+            transcriptDisplay.textContent = transcript;
+
+            if (event.results[0].isFinal) {
+                analyzeSentiment(transcript);
+            }
+        };
+
+        startButton.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+
+        function startRecording() {
+            recognition.start();
+            isRecording = true;
+            startButton.textContent = 'Detener Grabación';
+            startButton.classList.add('recording');
+            statusDisplay.textContent = 'Grabando...';
+        }
+
+        function stopRecording() {
+            recognition.stop();
+            isRecording = false;
+            startButton.textContent = 'Iniciar Grabación';
+            startButton.classList.remove('recording');
+            statusDisplay.textContent = 'Grabación detenida';
+        }
+
+        recognition.onerror = (event) => {
+            console.error('Error:', event.error);
+            statusDisplay.textContent = `Error: ${event.error}`;
+            stopRecording();
+        };
+
+        recognition.onend = () => {
+            if (isRecording) {
+                recognition.start();
+            }
+        };
+
+        function analyzeSentiment(text) {
+            fetch('https://sentim-api.herokuapp.com/api/v1/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const sentiment = data.result.type;
+                const confidence = Math.abs(data.result.polarity).toFixed(2);
+                
+                // Traducir el sentimiento al español
+                const sentimentInSpanish = {
+                    'positive': 'Positivo',
+                    'negative': 'Negativo',
+                    'neutral': 'Neutral'
+                }[sentiment];
+                
+                sentimentDisplay.textContent = `Sentimiento: ${sentimentInSpanish} (Confianza: ${confidence})`;
+                
+                const sentimentEntry = document.createElement('p');
+                sentimentEntry.textContent = `"${text}" - ${sentimentInSpanish}`;
+                sentimentEntry.classList.add(sentiment.toLowerCase());
+                
+                sentimentHistory.insertBefore(sentimentEntry, sentimentHistory.firstChild);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusDisplay.textContent = 'Error en el análisis de sentimiento';
+            });
+        }
+    </script>
+</body>
+</html>

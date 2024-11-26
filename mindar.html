@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <style>
+      #input_video, #segmentation_canvas {
+        display: none;
+        transform: scaleX(-1);
+        -webkit-transform: scaleX(-1);
+      }
+      .a-enter-vr { display: none; }
+    </style>
+  </head>
+  
+  <body>
+    <video id="input_video" playsinline autoplay muted></video>
+    <canvas id="segmentation_canvas"></canvas>
+
+    <a-scene
+      mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
+      color-space="sRGB"
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+    >
+      <a-assets>
+        <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png"/>
+        <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
+        <canvas id="billboard_canvas"></canvas>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false">
+        <a-entity position="0 0 -5000">
+          <a-plane id="billboard" 
+            material="src: #billboard_canvas; transparent: false; opacity: 1" 
+            width="6000" 
+            height="2000"
+            rotation="0 0 0"
+            
+            
+            >
+          </a-plane>
+        </a-entity>
+        <a-box position="0 0 -10000" depth="04000" height="0000" width="0000"></a-box>
+      </a-camera>
+
+      <a-entity mindar-image-target="targetIndex: 0">
+        <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      // Initialize elements
+      const video = document.getElementById('input_video');
+      const segmentationCanvas = document.getElementById('segmentation_canvas');
+      const billboardCanvas = document.getElementById('billboard_canvas');
+      const ctx = billboardCanvas.getContext('2d');
+
+      // Set canvas dimensions
+      billboardCanvas.width = 1280;
+      billboardCanvas.height = 720;
+
+      // Initialize MediaPipe Selfie Segmentation
+      const selfieSegmentation = new SelfieSegmentation({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+        }
+      });
+
+      selfieSegmentation.setOptions({
+        modelSelection: 1,
+        selfieMode: true
+      });
+
+      // Process results
+      selfieSegmentation.onResults((results) => {
+        try {
+          ctx.save();
+          ctx.clearRect(0, 0, billboardCanvas.width, billboardCanvas.height);
+          ctx.drawImage(results.segmentationMask, 0, 0, billboardCanvas.width, billboardCanvas.height);
+          ctx.globalCompositeOperation = 'source-in';
+          ctx.drawImage(results.image, 0, 0, billboardCanvas.width, billboardCanvas.height);
+          ctx.restore();
+
+          const imageData = ctx.getImageData(0, 0, billboardCanvas.width, billboardCanvas.height);
+          const data = imageData.data;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            if (alpha > 0) {
+              data[i + 3] = alpha * 0.9;
+            }
+          }
+          
+          ctx.putImageData(imageData, 0, 0);
+          
+          const billboardEl = document.querySelector('#billboard');
+          if (billboardEl && billboardEl.components.material) {
+            billboardEl.components.material.material.map.needsUpdate = true;
+          }
+        } catch (error) {
+          console.error('Error processing frame:', error);
+        }
+      });
+
+      // Initialize camera
+      const camera = new Camera(video, {
+        onFrame: async () => {
+          await selfieSegmentation.send({image: video});
+        },
+      });
+
+      // Start camera with permissions
+      document.addEventListener('DOMContentLoaded', () => {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const constraints = {
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          };
+        
+          navigator.mediaDevices.getUserMedia(constraints)
+            .then(function(stream) {
+              video.srcObject = stream;
+              video.onloadedmetadata = () => {
+                camera.start();
+              };
+            })
+            .catch(function(err) {
+              console.error("Camera error: ", err);
+            });
+        }
+      });
+
+      // Enhanced visibility handling
+      const sceneEl = document.querySelector('a-scene');
+      sceneEl.addEventListener('loaded', function () {
+        const billboardEl = document.querySelector('#billboard');
+        
+        // Initial material setup
+        billboardEl.addEventListener('materialtextureloaded', () => {
+          billboardEl.getObject3D('mesh').material.needsUpdate = true;
+        });
+
+        // Force multiple updates to ensure visibility
+        const updateMaterial = () => {
+          billboardEl.setAttribute('material', {
+            src: '#billboard_canvas',
+            transparent: true,
+            needsUpdate: true
+          });
+          billboardEl.getObject3D('mesh').material.needsUpdate = true;
+        };
+
+        // Multiple update attempts at different intervals
+        setTimeout(updateMaterial, 100);
+        setTimeout(updateMaterial, 500);
+        setTimeout(updateMaterial, 1000);
+      });
+    </script>
+  </body>
+</html>

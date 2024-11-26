@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaPipe Selfie Segmentation</title>
+    
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    
+    
+    <style>
+        body { margin: 0; }
+        #input_video, #segmentation_canvas {
+            display: none;
+            transform: scaleX(-1);
+            -webkit-transform: scaleX(-1);
+        }
+        .a-enter-vr { display: none; }
+    </style>
+</head>
+<body>
+    <!-- Video and Canvas elements -->
+    <video id="input_video" playsinline autoplay muted></video>
+    <canvas id="segmentation_canvas"></canvas>
+
+    <!-- A-Frame Scene -->
+    <a-scene>
+        <a-assets>
+            <canvas id="billboard_canvas"></canvas>
+        </a-assets>
+
+        <!-- Cámara con control de look -->
+        <a-entity camera look-controls position="0 1.6 0">
+            <a-entity position="0 0 -2">
+                <a-plane id="billboard" 
+                material="src: #billboard_canvas; transparent: false" 
+                width="3.3" 
+                height="2"
+                rotation="0 0 0">
+                </a-plane>
+            </a-entity>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        // Inicializar elementos
+        const video = document.getElementById('input_video');
+        const segmentationCanvas = document.getElementById('segmentation_canvas');
+        const billboardCanvas = document.getElementById('billboard_canvas');
+        const ctx = billboardCanvas.getContext('2d');
+
+        // Configurar dimensiones del canvas
+        billboardCanvas.width = 1280;
+        billboardCanvas.height = 720;
+
+        // Inicializar MediaPipe Selfie Segmentation
+        const selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+        });
+
+        selfieSegmentation.setOptions({
+            modelSelection: 1,
+            selfieMode: true
+        });
+
+        // Procesar resultados
+        selfieSegmentation.onResults((results) => {
+            try {
+                // Dibujar máscara de segmentación
+                ctx.save();
+                ctx.clearRect(0, 0, billboardCanvas.width, billboardCanvas.height);
+                ctx.drawImage(results.segmentationMask, 0, 0, 
+                            billboardCanvas.width, billboardCanvas.height);
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.drawImage(results.image, 0, 0, 
+                            billboardCanvas.width, billboardCanvas.height);
+                ctx.restore();
+
+                // Obtener datos de imagen para transparencia
+                const imageData = ctx.getImageData(0, 0, 
+                                                billboardCanvas.width, 
+                                                billboardCanvas.height);
+                const data = imageData.data;
+
+                // Procesar canal alfa
+                for (let i = 0; i < data.length; i += 4) {
+                    const alpha = data[i + 3];
+                    if (alpha > 0) {
+                        data[i + 3] = alpha * 0.9;
+                    }
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+                
+                // Forzar actualización de textura
+                const billboardEl = document.querySelector('#billboard');
+                if (billboardEl && billboardEl.components.material) {
+                    billboardEl.components.material.material.map.needsUpdate = true;
+                }
+            } catch (error) {
+                console.error('Error procesando frame:', error);
+            }
+        });
+
+        // Inicializar y arrancar cámara
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await selfieSegmentation.send({image: video});
+            },
+        });
+
+        // Iniciar cámara con permisos
+        document.addEventListener('DOMContentLoaded', () => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const constraints = {
+                    video: {
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+            
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function(stream) {
+                        video.srcObject = stream;
+                        video.onloadedmetadata = () => {
+                            camera.start();
+                        };
+                    })
+                    .catch(function(err) {
+                        console.error("Error de cámara: ", err);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>

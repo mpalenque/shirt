@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AR with Background Removal</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    #backgroundVideo, #backgroundCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: -1;
+      -webkit-transform: scaleX(-1);
+      transform: scaleX(-1);
+      will-change: transform;
+    }
+    .a-canvas {
+      background-color: transparent !important;
+      z-index: 1;
+    }
+    @supports (-webkit-touch-callout: none) {
+      #backgroundVideo {
+        position: fixed !important;
+        -webkit-position: fixed !important;
+      }
+    }
+    video {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="backgroundVideo" 
+         autoplay 
+         playsinline 
+         webkit-playsinline="true"
+         muted></video>
+  <canvas id="backgroundCanvas"></canvas>
+
+  <a-scene mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
+           color-space="sRGB" 
+           renderer="colorManagement: true, physicallyCorrectLights" 
+           vr-mode-ui="enabled: false" 
+           device-orientation-permission-ui="enabled: false">
+    <a-assets>
+      <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
+      <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+      <a-gltf-model rotation="0 0 0" position="0 0 0.1" scale="0.005 0.005 0.005" src="#avatarModel"
+        animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
+      </a-gltf-model>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const videoElement = document.getElementById('backgroundVideo');
+    const canvasElement = document.getElementById('backgroundCanvas');
+    const canvasContext = canvasElement.getContext('2d', {
+      alpha: false,
+      desynchronized: true
+    });
+
+    let animationFrameId = null;
+    let lastTime = 0;
+    const frameInterval = 1000/30; // 30 fps
+
+    async function setupWebcam() {
+      if (videoElement.srcObject) {
+        const tracks = videoElement.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+
+      const constraints = {
+        video: {
+          facingMode: 'environment'
+        }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElement.srcObject = stream;
+        return new Promise((resolve) => {
+          videoElement.onloadedmetadata = () => {
+            videoElement.play().then(() => resolve(videoElement));
+          };
+        });
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        // Try to restart camera on error
+        setTimeout(() => setupWebcam(), 1000);
+      }
+    }
+
+    async function loadAndRunBodyPix() {
+      try {
+        const net = await bodyPix.load({
+          architecture: 'MobileNetV1',
+          outputStride: 16,
+          multiplier: 0.75,
+          quantBytes: 2
+        });
+        
+        await setupWebcam();
+
+        async function performSegmentation(currentTime) {
+          if (!lastTime || currentTime - lastTime >= frameInterval) {
+            if (videoElement.readyState === 4) {
+              try {
+                const segmentation = await net.segmentPerson(videoElement, {
+                  flipHorizontal: true,
+                  internalResolution: 'medium',
+                  segmentationThreshold: 0.7
+                });
+
+                const foregroundColor = {r: 0, g: 0, b: 0, a: 0};
+                const backgroundColor = {r: 255, g: 0, b: 0, a: 255};
+                const mask = bodyPix.toMask(segmentation, foregroundColor, backgroundColor);
+
+                canvasContext.putImageData(mask, 0, 0);
+                bodyPix.drawMask(
+                  canvasElement,
+                  videoElement,
+                  mask,
+                  50,
+                  3,
+                  true
+                );
+              } catch (err) {
+                console.error('Segmentation error:', err);
+              }
+            }
+            lastTime = currentTime;
+          }
+          animationFrameId = requestAnimationFrame(performSegmentation);
+        }
+
+        animationFrameId = requestAnimationFrame(performSegmentation);
+
+      } catch (error) {
+        console.error('Error in BodyPix:', error);
+        // Try to restart on error
+        setTimeout(() => loadAndRunBodyPix(), 1000);
+      }
+    }
+
+    // Cleanup function
+    function cleanup() {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      if (videoElement.srcObject) {
+        const tracks = videoElement.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    }
+
+    // Handle page visibility changes
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        cleanup();
+      } else {
+        loadAndRunBodyPix();
+      }
+    });
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAndRunBodyPix();
+    });
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanup);
+</script>
+</body>
+</html>

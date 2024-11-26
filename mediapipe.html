@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest"></script>
+    <style>
+        .container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+        }
+        canvas, video {
+            position: absolute;
+            width: 640px;
+            height: 480px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <video id="webcam" autoplay></video>
+        <canvas id="output"></canvas>
+    </div>
+
+    <script>
+        let vision;
+        let imageSegmenter;
+        let runningMode = "VIDEO";
+        let webcamRunning = false;
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('output');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize MediaPipe Vision
+        async function initializeVision() {
+            vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+            );
+            imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.task",
+                    delegate: "GPU"
+                },
+                runningMode: runningMode
+            });
+            enableCam();
+        }
+
+        // Enable webcam
+        async function enableCam() {
+            const constraints = { video: true };
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                video.addEventListener('loadeddata', predictWebcam);
+                webcamRunning = true;
+            } catch (err) {
+                console.error("Error accessing webcam:", err);
+            }
+        }
+
+        // Prediction loop
+        async function predictWebcam() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            let startTimeMs = performance.now();
+            const segmentationResult = await imageSegmenter.segmentForVideo(video, startTimeMs);
+
+            // Draw segmentation mask
+            if (segmentationResult.categoryMask) {
+                const imageData = new ImageData(
+                    segmentationResult.categoryMask.getAsUint8Array(),
+                    segmentationResult.categoryMask.width,
+                    segmentationResult.categoryMask.height
+                );
+                ctx.putImageData(imageData, 0, 0);
+            }
+
+            if (webcamRunning) {
+                window.requestAnimationFrame(predictWebcam);
+            }
+        }
+
+        // Start the application
+        initializeVision();
+    </script>
+</body>
+</html>

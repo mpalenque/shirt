@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaPipe Selfie Segmentation</title>
+    
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe-inspector@master/dist/aframe-inspector.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <!-- Custom Component -->
+    <script>
+    AFRAME.registerComponent('billboard-texture', {
+        init: function() {
+            this.canvas = document.querySelector('#billboard_canvas');
+            this.texture = new THREE.CanvasTexture(this.canvas);
+            this.el.getObject3D('mesh').material = new THREE.MeshBasicMaterial({
+                map: this.texture, 
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+        },
+        tick: function() {
+            if (this.texture) {
+                this.texture.needsUpdate = true;
+            }
+        }
+    });
+    </script>
+    
+    <style>
+        body { margin: 0; }
+        #input_video, #segmentation_canvas {
+            display: none;
+            transform: scaleX(-1);
+            -webkit-transform: scaleX(-1);
+        }
+        .a-enter-vr { display: none; }
+    </style>
+</head>
+<body>
+    <!-- Video and Canvas elements -->
+    <video id="input_video" playsinline autoplay muted></video>
+    <canvas id="segmentation_canvas"></canvas>
+
+    <!-- A-Frame Scene -->
+    <a-scene mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
+        <a-assets>
+            <canvas id="billboard_canvas"></canvas>
+            <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
+            <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+            <a-gltf-model rotation="0 0 0" 
+                         position="0 0 0.1" 
+                         scale="0.005 0.005 0.005" 
+                         src="#avatarModel"
+                         animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
+            </a-gltf-model>
+            <a-plane id="billboard" 
+                    position="0 0 -10"
+                    width="4"
+                    height="3"
+                    billboard-texture>
+            </a-plane>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        const video = document.getElementById('input_video');
+        const segmentationCanvas = document.getElementById('segmentation_canvas');
+        const billboardCanvas = document.getElementById('billboard_canvas');
+        const ctx = billboardCanvas.getContext('2d');
+
+        billboardCanvas.width = 1280;
+        billboardCanvas.height = 720;
+
+        const selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+        });
+
+        selfieSegmentation.setOptions({
+            modelSelection: 1,
+            selfieMode: true
+        });
+
+        selfieSegmentation.onResults((results) => {
+            try {
+                ctx.clearRect(0, 0, billboardCanvas.width, billboardCanvas.height);
+                
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.drawImage(results.segmentationMask, 0, 0, 
+                            billboardCanvas.width, billboardCanvas.height);
+                
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.drawImage(results.image, 0, 0, 
+                            billboardCanvas.width, billboardCanvas.height);
+                
+                ctx.globalCompositeOperation = 'source-over';
+
+                const imageData = ctx.getImageData(0, 0, 
+                                                billboardCanvas.width, 
+                                                billboardCanvas.height);
+                const data = imageData.data;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] > 0) {
+                        data[i + 3] = Math.min(255, data[i + 3] * 0.9);
+                    }
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+            } catch (error) {
+                console.error('Error processing frame:', error);
+            }
+        });
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await selfieSegmentation.send({image: video});
+            },
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const constraints = {
+                    video: {
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+            
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then(function(stream) {
+                        video.srcObject = stream;
+                        video.onloadedmetadata = () => {
+                            camera.start();
+                        };
+                    })
+                    .catch(function(err) {
+                        console.error("Error de cámara: ", err);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>

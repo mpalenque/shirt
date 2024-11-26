@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation"></script>
+    <title>Background Replacement</title>
+    <style>
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        a-scene {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        #status {
+            z-index: 9999;
+        }
+
+        .input_video {
+            -webkit-transform: scaleX(-1);
+            transform: scaleX(-1);
+            display: none;
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            object-fit: cover !important;
+        }
+
+        .white-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 25vw;
+            height: 25vh;
+            background-color: white;
+            z-index: 10000;
+            pointer-events: none;
+            overflow: hidden;
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+        }
+
+        .output_canvas {
+            width: 100% !important;
+            height: 100% !important;
+            position: relative !important;
+            top: unset !important;
+            left: unset !important;
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            background-color: transparent !important;
+            -webkit-background-color: transparent !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="white-overlay">
+        <canvas class="output_canvas"></canvas>
+    </div>
+
+    <div class="container">
+        <a-scene mindar-image="imageTargetSrc: https://mpalenque.github.io/shirt/assets/targets.mind; 
+        filterMinCF: 0.9; 
+        filterBeta: 0.0001; 
+        warmupTolerance: 30; 
+        missTolerance: 20; 
+        trackingIntervalMilliseconds: 30;"
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights, alpha: true" 
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false"
+        transparent="true">
+
+            <video class="input_video" playsinline autoplay muted webkit-playsinline></video>
+
+            <a-assets>
+                <img id="card" src="/assets/yokkao.png" />
+                <a-asset-item id="astro" src="https://mpalenque.github.io/shirt/assets/astro.glb"></a-asset-item>
+            </a-assets>
+
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+            <a-entity mindar-image-target="targetIndex: 0">
+                <a-gltf-model src="#astro" position="0.2 0 0.1" scale="0.4 0.4 0.4"
+                    animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
+                    animation__float="property: position; to: 0.2 0.2 0.1; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
+                </a-gltf-model>
+            </a-entity>
+
+            <a-light type="ambient" color="#ffffff"></a-light>
+            <a-light type="directional" color="#ffffff" intensity="0.5" position="1 1 0"></a-light>
+        </a-scene>
+    </div>
+
+    <div id="status">Detection: not</div>
+
+    <script>
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusElement = document.getElementById('status');
+
+        let isDetected = true;
+
+        // Configure video element
+        videoElement.playsInline = true;
+        videoElement.muted = true;
+        videoElement.setAttribute('autoplay', '');
+        videoElement.setAttribute('playsinline', '');
+        videoElement.setAttribute('webkit-playsinline', '');
+
+        const bgVideo = document.createElement('video');
+        bgVideo.src = 'https://mpalenque.github.io/shirt/assets/bg.mp4';
+        bgVideo.loop = true;
+        bgVideo.muted = true;
+        bgVideo.play();
+
+        function setCanvasSize() {
+            const overlayWidth = Math.floor(window.innerWidth * 0.25);
+            const overlayHeight = Math.floor(window.innerHeight * 0.25);
+            canvasElement.width = overlayWidth;
+            canvasElement.height = overlayHeight;
+        }
+        setCanvasSize();
+        window.addEventListener('resize', setCanvasSize);
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            if (isDetected) {
+                canvasCtx.drawImage(bgVideo, 0, 0, canvasElement.width, canvasElement.height);
+            } else {
+                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            }
+            
+            if (results.segmentationMask) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvasElement.width;
+                tempCanvas.height = canvasElement.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                tempCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                tempCtx.globalCompositeOperation = 'destination-in';
+                tempCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+                canvasCtx.drawImage(tempCanvas, 0, 0);
+            }
+            
+            canvasCtx.restore();
+        }
+
+        const selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+        });
+        
+        selfieSegmentation.setOptions({
+            modelSelection: 1,
+        });
+
+        selfieSegmentation.onResults(onResults);
+
+        const constraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: 'user',
+                aspectRatio: { ideal: 1.333333 }
+            }
+        };
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+                
+                await videoElement.play();
+                setCanvasSize();
+
+                const processFrame = async () => {
+                    try {
+                        await selfieSegmentation.send({ image: videoElement });
+                    } catch (error) {
+                        console.error('Frame processing error:', error);
+                    }
+                    requestAnimationFrame(processFrame);
+                };
+                
+                requestAnimationFrame(processFrame);
+            } catch (error) {
+                console.error('Camera access error:', error);
+                alert('Could not access camera. Please ensure camera permissions are granted.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', startCamera);
+
+        const scene = document.querySelector('a-scene');
+        scene.addEventListener('targetFound', () => {
+            statusElement.textContent = 'Detection: Detected';
+            isDetected = true;
+        });
+        scene.addEventListener('targetLost', () => {
+            statusElement.textContent = 'Detection: Not detected';
+            isDetected = false;
+        });
+    </script>
+</body>
+</html>
