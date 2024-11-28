@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
@@ -27,15 +28,12 @@
             left: 0;
         }
         .output_canvas {
-            width: 50vw; /* Changed to 50% of viewport width */
-            height: 50vh; /* Changed to 50% of viewport height */
+            width: 100vw;
+            height: 100vh;
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 9999; /* Increased z-index to be on top */
-            border: 2px solid white; /* Optional: adds a border */
-            border-radius: 10px; /* Optional: rounds the corners */
+            top: 0;
+            left: 0;
+            z-index: 1;
         }
         .input_video {
             display: none;
@@ -61,31 +59,38 @@
         }
 
         #arjs-video {
-            position: fixed !important;
-            top: 0;
-            left: 0;
-            flex: 1;
-            z-index: -2;
-            visibility: hidden;
-        }
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    flex: 1;
+    z-index: -2;
+    visibility: hidden;
+}
 
-        .a-canvas {
-            position: fixed !important;
-            z-index: 1000;
-        }
+.a-canvas {
+    position: fixed !important;
+    z-index: 1000;
+}
 
-        .container {
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 1000;
-        }
+.container {
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000; /* Ensure container is above AR elements */
+}
+
+
     </style>
+
+
+
 </head>
 <body>
     <div class="container">
+    
+
         <a-scene mindar-image="imageTargetSrc: https://mpalenque.github.io/shirt/assets/targets.mind; 
         filterMinCF: 0.9; 
         filterBeta: 0.0001; 
@@ -108,12 +113,15 @@
             <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       
             <a-entity mindar-image-target="targetIndex: 0">
+              
+           
               <a-gltf-model src="#astro" position="0.2 0 0.1" scale="0.4 0.4 0.4"
               animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
               animation__float="property: position; to: 0.2 0.2 0.1; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
-              </a-gltf-model>
+          </a-gltf-model>
             </a-entity>
       
+            <!-- Adding lights -->
             <a-light type="ambient" color="#ffffff"></a-light>
             <a-light type="directional" color="#ffffff" intensity="0.5" position="1 1 0"></a-light>
           </a-scene>
@@ -121,6 +129,9 @@
 
     <div id="status">Detection: not</div>
 
+
+
+    
     <script>
         const videoElement = document.querySelector('.input_video');
         const canvasElement = document.querySelector('.output_canvas');
@@ -129,14 +140,16 @@
     
         let isDetected = true;
     
+        // Create and load background video
         const bgVideo = document.createElement('video');
         bgVideo.src = 'https://mpalenque.github.io/shirt/assets/bg.mp4';
         bgVideo.loop = true;
         bgVideo.muted = true;
         bgVideo.play();
         
+        // Set canvas size based on device
         function setCanvasSize() {
-            const width = Math.min(window.innerWidth * 0.5, 320); // Reduced size to 50%
+            const width = Math.min(window.innerWidth, 640);
             const height = (width * 4) / 3;
             canvasElement.width = width;
             canvasElement.height = height;
@@ -149,20 +162,29 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
             if (isDetected) {
+                // Draw the background video when marker is detected
                 canvasCtx.drawImage(bgVideo, 0, 0, canvasElement.width, canvasElement.height);
             } else {
+                // Draw the original video frame when marker is not detected
                 canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             }
             
+            // Draw the segmentation mask
             if (results.segmentationMask) {
+                // Create a temporary canvas for the person
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvasElement.width;
                 tempCanvas.height = canvasElement.height;
                 const tempCtx = tempCanvas.getContext('2d');
                 
+                // Draw the original video frame
                 tempCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Apply the segmentation mask
                 tempCtx.globalCompositeOperation = 'destination-in';
                 tempCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Draw the masked person over the background
                 canvasCtx.drawImage(tempCanvas, 0, 0);
             }
             
@@ -181,6 +203,7 @@
 
         selfieSegmentation.onResults(onResults);
 
+        // iOS optimized video constraints
         const constraints = {
             video: {
                 width: { ideal: 640 },
@@ -189,6 +212,7 @@
             }
         };
 
+        // Start webcam with error handling
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -211,11 +235,14 @@
             }
         }
 
+        // Add playsinline attribute dynamically for iOS
         videoElement.setAttribute('playsinline', true);
         videoElement.setAttribute('webkit-playsinline', true);
 
+        // Start camera when page is fully loaded
         document.addEventListener('DOMContentLoaded', startCamera);
 
+        // Update status based on image target detection
         const scene = document.querySelector('a-scene');
         scene.addEventListener('targetFound', () => {
             statusElement.textContent = 'Detection: Detected';
@@ -225,6 +252,13 @@
             statusElement.textContent = 'Detection: Not detected';
             isDetected = false;
         });
+
+
+
+
+
+        
+        
     </script>
 </body>
 </html>
