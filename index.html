@@ -1,29 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AR.js Object Placement</title>
-    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Basic AR Example</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #xr-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 999;
+        }
+        #xr-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
-<body style="margin: 0; overflow: hidden;">
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-        <!-- Camera -->
-        <a-entity camera></a-entity>
-        
-        <!-- Red sphere -->
-        <a-sphere 
-            position="0 1 -3" 
-            radius="0.3" 
-            color="red">
-        </a-sphere>
+<body>
+    <canvas id="canvas"></canvas>
+    <button id="xr-button" disabled>Start AR</button>
 
-        <!-- Occlusion sphere -->
-        <a-sphere 
-            position="1 1 -3" 
-            radius="0.3" 
-            material="shader: standard; colorWrite: false; opacity: 0">
-        </a-sphere>
+    <script>
+        let currentSession = null;
 
-    </a-scene>
+        // Check if WebXR is supported
+        if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-ar')
+                .then((supported) => {
+                    if (supported) {
+                        const button = document.querySelector('#xr-button');
+                        button.disabled = false;
+                        button.addEventListener('click', startAR);
+                    } else {
+                        console.error('AR not supported on this device');
+                        alert('AR not supported on this device');
+                    }
+                })
+                .catch(err => {
+                    console.error('Error checking AR support:', err);
+                    alert('Error checking AR support');
+                });
+        }
+
+        async function startAR() {
+            try {
+                const canvas = document.querySelector('#canvas');
+                const gl = canvas.getContext('webgl', { 
+                    xrCompatible: true,
+                    alpha: true 
+                });
+
+                if (!gl) {
+                    throw new Error('WebGL not supported');
+                }
+
+                // Basic WebGL setup
+                gl.clearColor(0, 0, 0, 0);
+                gl.enable(gl.DEPTH_TEST);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                // Request AR session
+                currentSession = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['local']
+                });
+
+                // Set up WebGL for XR
+                const glLayer = new XRWebGLLayer(currentSession, gl);
+                currentSession.updateRenderState({ 
+                    baseLayer: glLayer,
+                    depthNear: 0.1,
+                    depthFar: 1000
+                });
+
+                const referenceSpace = await currentSession.requestReferenceSpace('local');
+
+                // Handle frame updates
+                currentSession.requestAnimationFrame(function onFrame(time, frame) {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
+                    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                    const pose = frame.getViewerPose(referenceSpace);
+                    if (pose) {
+                        const view = pose.views[0];
+                        const viewport = glLayer.getViewport(view);
+                        gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+                    }
+
+                    currentSession.requestAnimationFrame(onFrame);
+                });
+
+                // Add session end handler
+                currentSession.addEventListener('end', () => {
+                    currentSession = null;
+                    button.textContent = 'Start AR';
+                });
+
+            } catch (err) {
+                console.error('Error starting AR:', err);
+                alert('Error starting AR: ' + err.message);
+            }
+        }
+    </script>
 </body>
 </html>
