@@ -39,6 +39,19 @@
             font-weight: bold;
             text-align: center;
         }
+
+        #levitateImage {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 200px;
+        height: auto;
+        z-index: 9999;
+        display: none;
+    }
+
+
     </style>
 </head>
 <body>
@@ -70,7 +83,7 @@
                     src="#airpods" 
                     position="0. .1 0."
                     rotation="90 0 0"
-                    scale=".3 .3 .3"
+                    scale=".2 .2 .2"
                     material="
                         shader: standard;
                         metalness: 0.8;
@@ -110,39 +123,46 @@
         </a-scene>
     </div>
     <div id="status">Scan the card for a magic trick!</div>
+    <img id="levitateImage" src="assets/levitate.png" alt="Levitate">
 
     <script>
-        const statusElement = document.getElementById('status');
-        let isDetected = false;
-        let detectionStartTime = null;
-        const detectionDuration = 11500;
-        let isRedirecting = false;
+            const statusElement = document.getElementById('status');
+    const levitateImage = document.getElementById('levitateImage');
+    let isDetected = false;
+    let detectionStartTime = null;
+    const detectionDuration = 11500;
+    let isRedirecting = false;
 
-        const scene = document.querySelector('a-scene');
+    const scene = document.querySelector('a-scene');
+    
+    scene.addEventListener('targetFound', () => {
+        statusElement.style.display = 'none';
+        isDetected = true;
+        detectionStartTime = Date.now();
         
-        scene.addEventListener('targetFound', () => {
-            statusElement.textContent = 'Scan the card for a magic trick!'; // Changed this line
-            isDetected = true;
-            detectionStartTime = Date.now();
-            
-            const model = document.getElementById('airpodsModel');
-            model.removeAttribute('animation-mixer');
-            model.setAttribute('animation-mixer', {
-                clip: '*',
-                loop: false,
-                clampWhenFinished: true,
-                timeScale: 1
-            });
+        const model = document.getElementById('airpodsModel');
+        model.removeAttribute('animation-mixer');
+        model.setAttribute('animation-mixer', {
+            clip: '*',
+            loop: false,
+            clampWhenFinished: true,
+            timeScale: 1
         });
+
+        setTimeout(() => {
+            levitateImage.style.display = 'block';
+        }, 6000);
+    });
+    
+    scene.addEventListener('targetLost', () => {
+        statusElement.style.display = 'block';
+        levitateImage.style.display = 'none';
+        isDetected = false;
+        detectionStartTime = null;
         
-        scene.addEventListener('targetLost', () => {
-            statusElement.textContent = 'Detection: Not detected';
-            isDetected = false;
-            detectionStartTime = null;
-            
-            const model = document.getElementById('airpodsModel');
-            model.removeAttribute('animation-mixer');
-        });
+        const model = document.getElementById('airpodsModel');
+        model.removeAttribute('animation-mixer');
+    });
 
         function checkDetectionDuration() {
             if (isRedirecting) return;
