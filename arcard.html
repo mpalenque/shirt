@@ -26,16 +26,17 @@
         }
         #status {
             position: fixed;
-            top: 20px;
+            top: 80px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color:  #0865fd;
             color: white;
             padding: 10px 20px;
             border-radius: 5px;
             z-index: 9999;
             font-size: 18px;
             font-family: Arial, sans-serif;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -107,7 +108,7 @@
             </a-light>
         </a-scene>
     </div>
-    <div id="status">Detection: not</div>
+    <div id="status">Scan the card for a magic trick!</div>
 
     <script>
         const statusElement = document.getElementById('status');
@@ -119,7 +120,7 @@
         const scene = document.querySelector('a-scene');
         
         scene.addEventListener('targetFound', () => {
-            statusElement.textContent = 'Detection: Detected';
+            statusElement.textContent = 'Scan the card for a magic trick!'; // Changed this line
             isDetected = true;
             detectionStartTime = Date.now();
             
