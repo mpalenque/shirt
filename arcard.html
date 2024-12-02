@@ -124,7 +124,7 @@
     </div>
     <div id="status">Scan the card for a magic trick!</div>
     <!-- New bottom status element -->
-    <div id="bottomStatus">BOOK A MEETING</div>
+    <div id="bottomStatus">Request a Demo!</div>
     <img id="levitateImage" src="assets/levitate.png" alt="Levitate">
 
     <script>
@@ -160,12 +160,12 @@
             }
 
             levitateTimer = setTimeout(() => {
-                if (isDetected) {
-                    levitateImage.style.display = 'block';
-                    statusElement.textContent = 'Behold the magic!';
-                    bottomStatusElement.style.display = 'block'; // Show bottom status
-                }
-            }, 6000);
+    if (isDetected) {
+        levitateImage.style.display = 'block';
+        statusElement.style.display = 'none'; // Hide status when showing "Behold the magic!"
+        bottomStatusElement.style.display = 'block';
+    }
+}, 6000);
         });
         
         scene.addEventListener('targetLost', () => {
