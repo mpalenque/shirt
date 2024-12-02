@@ -39,6 +39,23 @@
             font-weight: bold;
             text-align: center;
         }
+        /* New CSS for bottom status */
+        #bottomStatus {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #0865fd;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 9999;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+        }
         #levitateImage {
             position: fixed;
             top: 20px;
@@ -77,9 +94,9 @@
                 <a-gltf-model 
                     id="airpodsModel"
                     src="#airpods" 
-                    position="0. .1 0."
-                    rotation="90 0 0"
-                    scale=".3 .3 .3"
+                    position="0. -1.1 0."
+                    rotation="00 0 0"
+                    scale=".2 .2 .2"
                     material="
                         shader: standard;
                         metalness: 0.8;
@@ -106,10 +123,13 @@
         </a-scene>
     </div>
     <div id="status">Scan the card for a magic trick!</div>
+    <!-- New bottom status element -->
+    <div id="bottomStatus">BOOK A MEETING</div>
     <img id="levitateImage" src="assets/levitate.png" alt="Levitate">
 
     <script>
         const statusElement = document.getElementById('status');
+        const bottomStatusElement = document.getElementById('bottomStatus'); // New element reference
         const levitateImage = document.getElementById('levitateImage');
         let isDetected = false;
         let detectionStartTime = null;
@@ -122,6 +142,7 @@
         scene.addEventListener('targetFound', () => {
             statusElement.textContent = 'Card found! Hold still...';
             statusElement.style.display = 'block';
+            bottomStatusElement.style.display = 'none'; // Hide bottom status
             isDetected = true;
             detectionStartTime = Date.now();
             
@@ -134,16 +155,15 @@
                 timeScale: 1
             });
 
-            // Clear any existing timer
             if (levitateTimer) {
                 clearTimeout(levitateTimer);
             }
 
-            // Start new 6-second timer
             levitateTimer = setTimeout(() => {
                 if (isDetected) {
                     levitateImage.style.display = 'block';
                     statusElement.textContent = 'Behold the magic!';
+                    bottomStatusElement.style.display = 'block'; // Show bottom status
                 }
             }, 6000);
         });
@@ -151,11 +171,11 @@
         scene.addEventListener('targetLost', () => {
             statusElement.textContent = 'Scan the card for a magic trick!';
             statusElement.style.display = 'block';
+            bottomStatusElement.style.display = 'none'; // Hide bottom status
             levitateImage.style.display = 'none';
             isDetected = false;
             detectionStartTime = null;
             
-            // Clear the timer when target is lost
             if (levitateTimer) {
                 clearTimeout(levitateTimer);
                 levitateTimer = null;
