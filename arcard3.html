@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.rawgit.com/donmccurdy/aframe-extras/v6.1.1/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <title>AR Detection</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        a-scene {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+        }
+        #status {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #0865fd;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 9999;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            text-align: center;
+        }
+        /* New CSS for bottom status */
+        #bottomStatus {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #0865fd;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 9999;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+        }
+        #levitateImage {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: auto;
+            z-index: 9999;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a-scene mindar-image="imageTargetSrc: assets/large.mind; 
+        filterMinCF: 0.0009; 
+        filterBeta: 0.0001; 
+        warmupTolerance: 30; 
+        missTolerance: 20; 
+        trackingIntervalMilliseconds: 30;"
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights" 
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false">
+            <a-assets>
+                <a-asset-item id="airpods" src="assets/airpods.glb"></a-asset-item>
+                <img id="envMap" src="textures/environment.jpg">
+                <img id="normalMap" src="textures/normal.jpg">
+                <img id="roughnessMap" src="textures/roughness.jpg">
+                <img id="metalnessMap" src="textures/metalness.jpg">
+            </a-assets>
+            
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+            
+            <a-entity mindar-image-target="targetIndex: 0">
+                <a-gltf-model 
+                    id="airpodsModel"
+                    src="#airpods" 
+                    position="0. -.9 0."
+                    rotation="00 0 0"
+                    scale=".2 .2 .2"
+                    material="
+                        shader: standard;
+                        metalness: 0.8;
+                        roughness: 1;
+                        envMap: #envMap;
+                        normalMap: #normalMap;
+                        roughnessMap: #roughnessMap;
+                        metalnessMap: #metalnessMap;
+                        envMapIntensity: 1.0"
+                >
+                </a-gltf-model>
+
+                <a-entity animation="property: rotation; to: 0 360 0; dur: 4000; easing: linear; loop: true">
+                    <a-light type="point" color="#ff0000" intensity="0.5" position="1 0 0"></a-light>
+                    <a-light type="point" color="#00ff00" intensity="0.5" position="-0.5 0.866 0"></a-light>
+                    <a-light type="point" color="#0000ff" intensity="0.5" position="-0.5 -0.866 0"></a-light>
+                </a-entity>
+            </a-entity>
+            
+            <a-light type="directional" color="#ffffff" intensity="0.8" position="1 1 1" cast-shadow="true"></a-light>
+            <a-light type="ambient" color="#ffffff" intensity="0.4"></a-light>
+            <a-light type="directional" color="#ffffff" intensity="0.3" position="-1 1 -1"></a-light>
+            <a-light type="directional" color="#ffffff" intensity="0.2" position="0 -1 0"></a-light>
+        </a-scene>
+    </div>
+    <div id="status">Scan the card for a magic trick!</div>
+    <!-- New bottom status element -->
+    <div id="bottomStatus">Request a Demo!</div>
+    <img id="levitateImage" src="assets/levitate.png" alt="Levitate">
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const bottomStatusElement = document.getElementById('bottomStatus'); // New element reference
+        const levitateImage = document.getElementById('levitateImage');
+        let isDetected = false;
+        let detectionStartTime = null;
+        const detectionDuration = 11000;
+        let isRedirecting = false;
+        let levitateTimer = null;
+
+        const scene = document.querySelector('a-scene');
+        
+        scene.addEventListener('targetFound', () => {
+            statusElement.textContent = 'Card found! Hold still...';
+            statusElement.style.display = 'block';
+            bottomStatusElement.style.display = 'none'; // Hide bottom status
+            isDetected = true;
+            detectionStartTime = Date.now();
+            
+            const model = document.getElementById('airpodsModel');
+            model.removeAttribute('animation-mixer');
+            model.setAttribute('animation-mixer', {
+                clip: '*',
+                loop: false,
+                clampWhenFinished: true,
+                timeScale: 1
+            });
+
+            if (levitateTimer) {
+                clearTimeout(levitateTimer);
+            }
+
+            levitateTimer = setTimeout(() => {
+    if (isDetected) {
+        levitateImage.style.display = 'block';
+        statusElement.style.display = 'none'; // Hide status when showing "Behold the magic!"
+        bottomStatusElement.style.display = 'block';
+    }
+}, 6000);
+        });
+        
+        scene.addEventListener('targetLost', () => {
+            statusElement.textContent = 'Scan the card for a magic trick!';
+            statusElement.style.display = 'block';
+            bottomStatusElement.style.display = 'none'; // Hide bottom status
+            levitateImage.style.display = 'none';
+            isDetected = false;
+            detectionStartTime = null;
+            
+            if (levitateTimer) {
+                clearTimeout(levitateTimer);
+                levitateTimer = null;
+            }
+            
+            const model = document.getElementById('airpodsModel');
+            model.removeAttribute('animation-mixer');
+        });
+
+        function checkDetectionDuration() {
+            if (isRedirecting) return;
+
+            if (isDetected && detectionStartTime) {
+                const elapsedTime = Date.now() - detectionStartTime;
+                if (elapsedTime >= detectionDuration) {
+                    isRedirecting = true;
+                    window.location.href = 'https://www.levitate.ai/airpods';
+                    return;
+                }
+            }
+            requestAnimationFrame(checkDetectionDuration);
+        }
+        
+        requestAnimationFrame(checkDetectionDuration);
+    </script>
+</body>
+</html>
