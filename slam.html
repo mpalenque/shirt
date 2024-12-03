@@ -141,8 +141,8 @@
 <body>
 <div id="container"></div>
 <div id="overlay">
-    <button id="start_button">Start</button>
     <div id="splash"></div>
+</div>
 </div>
 <script type="module">
 
@@ -243,19 +243,16 @@
             }, 30 );
         }
 
-        setTimeout( () =>
-        {
-            $splash.remove();
-
-            $start.addEventListener( 'click', () =>
-            {
+        setTimeout(() => {
+        $splash.remove();
+        // Start camera immediately
+        Camera.Initialize(config)
+            .then(media => {
                 $overlay.remove();
-
-                Camera.Initialize( config ).then( media => demo( media ) ).catch( error => alert( 'Camera ' + error ) );
-
-            }, { once: true } );
-
-        }, splashFadeTime );
+                demo(media);
+            })
+            .catch(error => alert('Camera ' + error));
+    }, splashFadeTime);
     }
 
     window.addEventListener( 'load', main );
